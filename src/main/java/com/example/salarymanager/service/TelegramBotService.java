@@ -411,7 +411,7 @@ public class TelegramBotService {
                 "────────────────\n" +
                 "💰 총 잔액: " + formatMoney(summary.getTotalBalance()) + "\n" +
                 "📌 고정지출 빠질 돈: " + formatMoney(summary.getTotalFixedExpense()) + "\n" +
-                "💸 지출한돈: " + formatMoney(summary.getTotalVariableExpense()) + "\n" +
+                "💸 이번달 지출한 돈: " + formatMoney(summary.getTotalVariableExpense()) + "\n" +
                 "────────────────\n" +
                 "✨ **지금 진짜 쓸 수 있는 돈**: " + formatMoney(summary.getFinalAvailableBudget());
 
