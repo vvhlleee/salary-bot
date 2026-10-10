@@ -51,7 +51,7 @@ public class TelegramBotService {
                 return;
             }
 
-            // 1. 공통 명령어 처리 (/초기설정, /설정변경, /잔액, 취소)
+            // 1. 공통 명령어 처리 (/초기설정, /설정변경, /잔액, /입금, /지출, 취소)
             if (trimmedText.equals("/초기설정")) {
                 setting.setSetupStep(UserSetting.SetupStep.INIT_BALANCE);
                 userSettingRepository.save(setting);
@@ -75,6 +75,30 @@ public class TelegramBotService {
                 return;
             }
 
+            // [추가] /입금 명령어 처리
+            if (trimmedText.equals("/입금")) {
+                if (setting.getSetupStep() != UserSetting.SetupStep.DONE) {
+                    telegramService.sendMessage("⚠️ 현재 설정 진행 중입니다. 입력을 완료해주세요!");
+                    return;
+                }
+                setting.setSetupStep(UserSetting.SetupStep.WAITING_FOR_DEPOSIT);
+                userSettingRepository.save(setting);
+                telegramService.sendMessage("💰 얼마를 입금하시겠습니까? 금액을 숫자로 입력해주세요.");
+                return;
+            }
+
+            // [추가] /지출 명령어 처리
+            if (trimmedText.equals("/지출")) {
+                if (setting.getSetupStep() != UserSetting.SetupStep.DONE) {
+                    telegramService.sendMessage("⚠️ 현재 설정 진행 중입니다. 입력을 완료해주세요!");
+                    return;
+                }
+                setting.setSetupStep(UserSetting.SetupStep.WAITING_FOR_EXPENSE);
+                userSettingRepository.save(setting);
+                telegramService.sendMessage("💸 얼마를 지출하시겠습니까? 금액을 숫자로 입력해주세요.");
+                return;
+            }
+
             if (trimmedText.equals("취소") || trimmedText.equals("/취소")) {
                 if (setting.getSetupStep() != UserSetting.SetupStep.DONE) {
                     setting.setSetupStep(UserSetting.SetupStep.DONE);
@@ -82,17 +106,25 @@ public class TelegramBotService {
                     telegramService.sendMessage("❌ 설정이 취소되었습니다.");
                     return;
                 }
+                // 입금/지출 대기 상태에서 취소할 때
+                if (setting.getSetupStep() == UserSetting.SetupStep.WAITING_FOR_DEPOSIT ||
+                        setting.getSetupStep() == UserSetting.SetupStep.WAITING_FOR_EXPENSE) {
+                    setting.setSetupStep(UserSetting.SetupStep.DONE);
+                    userSettingRepository.save(setting);
+                    telegramService.sendMessage("❌ 입출금 입력이 취소되었습니다.");
+                    return;
+                }
                 handleCancel(userId);
                 return;
             }
 
-            // 2. 단계별 대화형 입력 처리 (초기설정 또는 설정변경 중일 때)
+            // 2. 단계별 대화형 입력 처리 (초기설정, 설정변경, 입금/지출 대기 중일 때)
             if (setting.getSetupStep() != UserSetting.SetupStep.DONE) {
                 handleWizardInput(trimmedText, setting);
                 return;
             }
 
-            // 3. 평상시 지출 입력 처리
+            // 3. 평상시 지출 입력 처리 (기존 단축 입력 방식)
             handleExpenseInput(trimmedText, userId);
 
         } catch (Exception e) {
@@ -106,6 +138,53 @@ public class TelegramBotService {
         String cleanedText = text.replaceAll("[^0-9.]", "");
 
         switch (setting.getSetupStep()) {
+            // --- [ /입금 대기 단계 ] ---
+            case WAITING_FOR_DEPOSIT:
+                try {
+                    BigDecimal amount = new BigDecimal(cleanedText);
+
+                    // 기존 통장 잔액에 입금액 더하기
+                    Account account = accountRepository.findByUserId(userId).stream().findFirst().orElse(new Account());
+                    BigDecimal currentBalance = account.getBalance() != null ? account.getBalance() : BigDecimal.ZERO;
+                    BigDecimal newBalance = currentBalance.add(amount);
+
+                    updateAccountBalance(userId, newBalance);
+
+                    setting.setSetupStep(UserSetting.SetupStep.DONE);
+                    userSettingRepository.save(setting);
+
+                    BudgetService.BudgetSummary summary = budgetService.calculateFinalBudget(userId);
+                    telegramService.sendMessage(String.format("✅ 입금이 완료되었습니다!\n- 입금액: %s\n✨ 현재 남은 가용 예산: %s",
+                            formatMoney(amount), formatMoney(summary.getFinalAvailableBudget())));
+                } catch (NumberFormatException e) {
+                    telegramService.sendMessage("⚠️ 올바른 숫자 형태만 입력해주세요. 다시 입력해 주세요.");
+                }
+                break;
+
+            // --- [ /지출 대기 단계 ] ---
+            case WAITING_FOR_EXPENSE:
+                try {
+                    BigDecimal amount = new BigDecimal(cleanedText);
+
+                    // 지출 내역 저장 (기타 지출로 처리)
+                    Expense expense = new Expense();
+                    expense.setUserId(userId);
+                    expense.setDescription("기타 지출");
+                    expense.setAmount(amount);
+                    expense.setExpenseDate(LocalDateTime.now());
+                    expenseRepository.save(expense);
+
+                    setting.setSetupStep(UserSetting.SetupStep.DONE);
+                    userSettingRepository.save(setting);
+
+                    BudgetService.BudgetSummary summary = budgetService.calculateFinalBudget(userId);
+                    telegramService.sendMessage(String.format("✅ 지출이 반영되었습니다!\n- 지출액: %s\n✨ 현재 남은 가용 예산: %s",
+                            formatMoney(amount), formatMoney(summary.getFinalAvailableBudget())));
+                } catch (NumberFormatException e) {
+                    telegramService.sendMessage("⚠️ 올바른 숫자 형태만 입력해주세요. 다시 입력해 주세요.");
+                }
+                break;
+
             // --- [ /초기설정 연속 단계 ] ---
             case INIT_BALANCE:
                 try {
@@ -356,7 +435,7 @@ public class TelegramBotService {
     private void updateAccountBalance(Long userId, BigDecimal balance) {
         Account account = accountRepository.findByUserId(userId).stream().findFirst().orElse(new Account());
         account.setUserId(userId);
-        account.setBankName("내 통장");
+        account.setBankName("내 통장 잔액");
         account.setBalance(balance);
         accountRepository.save(account);
     }
@@ -372,7 +451,7 @@ public class TelegramBotService {
         } else if (parts.length == 1) {
             amount = new BigDecimal(parts[0].replaceAll("[^0-9.]", ""));
         } else {
-            telegramService.sendMessage("⚠️ 입력 형식 오류!\n- 지출 입력: [편의점 1500] 또는 [20000]\n- 잔액 확인: [/잔액]\n- 설정 변경: [/설정변경]");
+            telegramService.sendMessage("⚠️ 입력 형식 오류!\n지출 입력: [편의점 1500] 또는 [20000]\n잔액 확인: [/잔액]\n입금: [/입금]\n지출: [/지출]");
             return;
         }
 
@@ -418,7 +497,6 @@ public class TelegramBotService {
         telegramService.sendMessage(report);
     }
 
-    // 숫자를 "450,000원" 형태로 예쁘게 변환해 주는 헬퍼 메서드
     private String formatMoney(BigDecimal amount) {
         if (amount == null) return "0원";
         DecimalFormat df = new DecimalFormat("#,###");

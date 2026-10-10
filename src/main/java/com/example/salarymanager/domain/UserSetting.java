@@ -50,6 +50,8 @@ public class UserSetting {
         ADD_FIXED_TITLE,
         ADD_FIXED_AMOUNT,
         ADD_FIXED_DATE,
-        DELETE_FIXED_SELECT
+        DELETE_FIXED_SELECT,
+        WAITING_FOR_DEPOSIT,
+        WAITING_FOR_EXPENSE
     }
 }
