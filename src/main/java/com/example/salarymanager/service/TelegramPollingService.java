@@ -1,61 +1,93 @@
 package com.example.salarymanager.service;
 
-import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.scheduling.annotation.Scheduled;
-import org.springframework.stereotype.Service;
-import org.springframework.web.client.RestTemplate;
-import org.springframework.web.util.UriComponentsBuilder;
+import org.springframework.stereotype.Component;
+import org.telegram.telegrambots.bots.TelegramLongPollingBot;
+import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
+import org.telegram.telegrambots.meta.api.objects.Update;
+import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 
-import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
-@Service
-@RequiredArgsConstructor
-public class TelegramPollingService {
+@Component
+public class TelegramPollingService extends TelegramLongPollingBot {
 
-    @Value("${telegram.bot.token}")
-    private String botToken;
+    // 사용자별 잔액 저장 (실제 서비스에서는 DB나 Repository를 연동하여 사용하세요)
+    private final Map<Long, Double> userBalances = new ConcurrentHashMap<>();
 
-    private final TelegramBotService telegramBotService;
-    private final RestTemplate restTemplate = new RestTemplate();
+    // 사용자별 현재 대화 상태 관리 (WAITING_FOR_DEPOSIT, WAITING_FOR_EXPENSE, IDLE)
+    private final Map<Long, String> userStates = new ConcurrentHashMap<>();
 
-    private long lastUpdateId = 0; // 마지막으로 읽은 메시지의 ID (중복 처리 방지용)
+    @Override
+    public String getBotUsername() {
+        return "your_bot_username"; // 본인의 봇 유저네임
+    }
 
-    // 3초마다(3000ms) 텔레그램 서버에 새로운 메시지가 있는지 확인
-    @Scheduled(fixedRate = 3000)
-    public void checkNewMessages() {
-        try {
-            String url = UriComponentsBuilder.newInstance()
-                    .scheme("https")
-                    .host("api.telegram.org")
-                    .path("/bot" + botToken + "/getUpdates")
-                    .queryParam("offset", lastUpdateId + 1)
-                    .queryParam("timeout", 1)
-                    .toUriString();
+    @Override
+    public String getBotToken() {
+        return "your_bot_token"; // 본인의 봇 토큰
+    }
 
-            Map<String, Object> response = restTemplate.getForObject(url, Map.class);
+    @Override
+    public void onUpdateReceived(Update update) {
+        if (!update.hasMessage() || !update.getMessage().hasText()) {
+            return;
+        }
 
-            if (response != null && Boolean.TRUE.equals(response.get("ok"))) {
-                List<Map<String, Object>> results = (List<Map<String, Object>>) response.get("result");
+        long chatId = update.getMessage().getChatId();
+        String messageText = update.getMessage().getText().trim();
 
-                if (results != null) {
-                    for (Map<String, Object> update : results) {
-                        long updateId = ((Number) update.get("update_id")).longValue();
-                        lastUpdateId = updateId; // 처리한 메시지 ID 갱신
+        // 현재 사용자의 대화 상태 가져오기 (기본값: IDLE)
+        String currentState = userStates.getOrDefault(chatId, "IDLE");
 
-                        Map<String, Object> message = (Map<String, Object>) update.get("message");
-                        if (message != null && message.containsKey("text")) {
-                            String text = (String) message.get("text");
+        // 1. 명령어 처리 (/입금 또는 /지출)
+        if (messageText.equals("/입금")) {
+            userStates.put(chatId, "WAITING_FOR_DEPOSIT");
+            sendMessage(chatId, "얼마를 입금하시겠습니까? 금액을 숫자로 입력해주세요.");
+            return;
+        } else if (messageText.equals("/지출")) {
+            userStates.put(chatId, "WAITING_FOR_EXPENSE");
+            sendMessage(chatId, "얼마를 지출하시겠습니까? 금액을 숫자로 입력해주세요.");
+            return;
+        }
 
-                            // 봇에게 온 메시지를 앞서 만든 처리 서비스로 넘김
-                            telegramBotService.processIncomingMessage(text);
-                        }
-                    }
-                }
+        // 2. 상태에 따른 금액 입력 처리
+        if (currentState.equals("WAITING_FOR_DEPOSIT")) {
+            try {
+                double amount = Double.parseDouble(messageText);
+                double currentBalance = userBalances.getOrDefault(chatId, 0.0) + amount;
+                userBalances.put(chatId, currentBalance);
+
+                userStates.remove(chatId); // 상태 초기화
+                sendMessage(chatId, String.format("입금이 완료되었습니다. 💰 현재 잔액: %.0f원", currentBalance));
+            } catch (NumberFormatException e) {
+                sendMessage(chatId, "올바른 숫자 형태만 입력해주세요. 다시 입력해 주세요.");
             }
-        } catch (Exception e) {
-            // 네트워크 오류 등은 무시하고 다음 주기에 재시도
+        } else if (currentState.equals("WAITING_FOR_EXPENSE")) {
+            try {
+                double amount = Double.parseDouble(messageText);
+                double currentBalance = userBalances.getOrDefault(chatId, 0.0) - amount;
+                userBalances.put(chatId, currentBalance);
+
+                userStates.remove(chatId); // 상태 초기화
+                sendMessage(chatId, String.format("지출이 반영되었습니다. 💸 현재 잔액: %.0f원", currentBalance));
+            } catch (NumberFormatException e) {
+                sendMessage(chatId, "올바른 숫자 형태만 입력해주세요. 다시 입력해 주세요.");
+            }
+        } else {
+            // 그 외 일반 텍스트 입력 시 안내
+            sendMessage(chatId, "명령어를 선택해주세요.\n/입금 - 잔액 추가\n/지출 - 잔액 차감");
+        }
+    }
+
+    private void sendMessage(long chatId, String text) {
+        SendMessage message = new SendMessage();
+        message.setChatId(String.valueOf(chatId));
+        message.setText(text);
+        try {
+            execute(message);
+        } catch (TelegramApiException e) {
+            e.printStackTrace();
         }
     }
 }
