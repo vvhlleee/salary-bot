@@ -28,10 +28,10 @@ public class TelegramBotService {
     private final TelegramService telegramService;
     private final BudgetService budgetService;
 
-    public void processIncomingMessage(String text) {
+    public void processIncomingMessage(Long chatId, String text) {
         try {
             String trimmedText = text.trim();
-            Long userId = 1L;
+            Long userId = chatId;
 
             UserSetting setting = userSettingRepository.findByUserId(userId)
                     .orElseGet(() -> {

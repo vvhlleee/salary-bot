@@ -1,3 +1,17 @@
+// 수정 전: package com.example.salarymanager.telegram;
+// 수정 후:
+package com.example.salarymanager.service;
+
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestTemplate;
+
+import java.util.HashMap;
+import java.util.Map;
+
 @Service
 public class TelegramService {
 
@@ -7,12 +21,10 @@ public class TelegramService {
     @Value("${telegram.bot.chat-id}")
     private String defaultChatId;
 
-    // 1. 기존 코드들이 그대로 쓰도록 둔 메서드 (서버 알림, 스케줄러용)
     public void sendMessage(String message) {
         sendMessage(defaultChatId, message);
     }
 
-    // 2. 대화형 봇 답장용으로 새로 추가한 메서드 (특정 유저에게 전송)
     public void sendMessage(String targetChatId, String message) {
         String url = "https://api.telegram.org/bot" + botToken + "/sendMessage";
         RestTemplate restTemplate = new RestTemplate();
