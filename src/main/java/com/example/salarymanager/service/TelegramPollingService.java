@@ -33,14 +33,13 @@ public class TelegramPollingService extends TelegramLongPollingBot {
 
     @Override
     public void onUpdateReceived(Update update) {
-        if (!update.hasMessage() || !update.getMessage().hasText()) {
+        if (!update.hasMessage() || !update.hasMessage() || !update.getMessage().hasText()) {
             return;
         }
 
-        long chatId = update.getMessage().getChatId(); // [수정] 챗 아이디 추출
+        long chatId = update.getMessage().getChatId();
         String messageText = update.getMessage().getText().trim();
 
-        // [수정] TelegramBotService로 메시지와 chatId를 함께 전달합니다!
         try {
             telegramBotService.processIncomingMessage(chatId, messageText);
         } catch (Exception e) {
