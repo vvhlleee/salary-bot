@@ -20,15 +20,24 @@ repositories {
 
 dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
-    implementation 'org.springframework.boot:spring-boot-starter-webmvc'
+
+    // [수정] webmvc 대신 표준 spring-boot-starter-web으로 교체 (톰캣 포함)
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+
+    // [추가] 텔레그램 봇 및 데이터 검증에 반드시 필요한 밸리데이션 라이브러리
+    implementation 'org.springframework.boot:spring-boot-starter-validation'
+
     compileOnly 'org.projectlombok:lombok'
     runtimeOnly 'com.mysql:mysql-connector-j'
     annotationProcessor 'org.projectlombok:lombok'
+
     testImplementation 'org.springframework.boot:spring-boot-starter-data-jpa-test'
-    testImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-web-test'
     testCompileOnly 'org.projectlombok:lombok'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
     testAnnotationProcessor 'org.projectlombok:lombok'
+
+    // 텔레그램 봇 스타터
     implementation 'org.telegram:telegrambots-spring-boot-starter:6.9.7.1'
 }
 

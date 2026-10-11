@@ -18,7 +18,7 @@ public class SalaryManagerApplication {
     @Bean
     CommandLineRunner init(TelegramService telegramService) {
         return args -> {
-            telegramService.sendMessage("🚀 [Salary Manager] 서버가 성공적으로 켜졌습니다! 텔레그램 연동 완료!");
+            telegramService.sendMessage("🚀 [Salary Manager] 서버가 성공적으로 켜졌습니다! 텔레그램 연동 완료!\n 명령어: /초기설정 /설정변경 /입금 /출금 /초기화");
         };
     }
 }

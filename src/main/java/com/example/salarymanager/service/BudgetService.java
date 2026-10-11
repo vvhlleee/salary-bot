@@ -39,7 +39,6 @@ public class BudgetService {
         int currentDay = LocalDate.now().getDayOfMonth();
 
         // 3. 이번 달 남은 고정지출만 계산 (출금일이 오늘 이상인 것만 포함: payDate >= currentDay)
-        // 지났거나 이미 처리된 고정지출은 자동으로 제외됩니다!
         List<FixedExpense> fixedExpenses = fixedExpenseRepository.findByUserId(userId);
         BigDecimal totalFixedExpense = BigDecimal.ZERO;
         for (FixedExpense fe : fixedExpenses) {
@@ -48,7 +47,7 @@ public class BudgetService {
             }
         }
 
-        // 4. 짤짤이 쓴 돈 합산
+        // 4. 변동 지출(짤짤이) 쓴 돈 합산
         List<Expense> expenses = expenseRepository.findAll();
         BigDecimal totalVariableExpense = BigDecimal.ZERO;
         for (Expense exp : expenses) {
@@ -57,7 +56,7 @@ public class BudgetService {
             }
         }
 
-        // 5. 진짜 쓸 수 있는 돈 = 총 잔액 - 이번 달 남은 고정지출 - 짤짤이 쓴 돈
+        // 5. 진짜 쓸 수 있는 돈 = 총 잔액 - 이번 달 남은 고정지출 - 변동 지출
         BigDecimal finalAvailableBudget = totalBalance.subtract(totalFixedExpense).subtract(totalVariableExpense);
 
         return new BudgetSummary(totalBalance, totalFixedExpense, totalVariableExpense, finalAvailableBudget);

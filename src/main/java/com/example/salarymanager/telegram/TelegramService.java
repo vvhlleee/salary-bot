@@ -1,15 +1,3 @@
-package com.example.salarymanager.service;
-
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.HttpEntity;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.MediaType;
-import org.springframework.stereotype.Service;
-import org.springframework.web.client.RestTemplate;
-
-import java.util.HashMap;
-import java.util.Map;
-
 @Service
 public class TelegramService {
 
@@ -17,20 +5,23 @@ public class TelegramService {
     private String botToken;
 
     @Value("${telegram.bot.chat-id}")
-    private String chatId;
+    private String defaultChatId;
 
-    // 텔레그램으로 메시지를 보내는 메서드 (POST JSON 방식)
+    // 1. 기존 코드들이 그대로 쓰도록 둔 메서드 (서버 알림, 스케줄러용)
     public void sendMessage(String message) {
-        String url = "https://api.telegram.org/bot" + botToken + "/sendMessage";
+        sendMessage(defaultChatId, message);
+    }
 
+    // 2. 대화형 봇 답장용으로 새로 추가한 메서드 (특정 유저에게 전송)
+    public void sendMessage(String targetChatId, String message) {
+        String url = "https://api.telegram.org/bot" + botToken + "/sendMessage";
         RestTemplate restTemplate = new RestTemplate();
 
-        // JSON 형식으로 데이터 세팅
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
 
         Map<String, Object> body = new HashMap<>();
-        body.put("chat_id", chatId);
+        body.put("chat_id", targetChatId);
         body.put("text", message);
 
         HttpEntity<Map<String, Object>> request = new HttpEntity<>(body, headers);
